@@ -21,7 +21,7 @@ R= collect(1:2)         #Regions
 G= collect(1:15)        #Generators
 G_DK1= collect(1:7)     #Generators DK1
 G_DK2= collect(8:15)    #Generators DK2
-WIND= collect(1:4)      #Wind Generators DK1
+WIND= collect(1:4)      #Wind Generators
 WWIND= collect(1:2)     #Wind Generators DK1
 EWIND= collect(3:4)     #Wind Generators DK2
 IMP=collect(1:2)        #Importers
@@ -29,7 +29,7 @@ IMP=collect(1:2)        #Importers
 
 
 #data acquisition
-path="C:/Users/pietr/Documents/DTU/Renewables in electricity markets"
+path="C:/Users/Francesco/Desktop/DTU/3_Spring 2020/Renewables in el markets/Assignement 1"
 X = CSV.read("$path/assignment1.csv", delim=",")
 
 
@@ -48,14 +48,14 @@ pw=-1*Supp
 D_DK1=X.ConsDK1+X.DEexp
 D_DK2=X.ConsDK2
 D_tot=D_DK1+D_DK2
-
+D_DK1[1:5].=8000
 
 #TRANSMISSION
 TC=600          #transmission capacity between DK1 and DK2
 
 
 #LOAD SHEDDING
-LSCost=100000000000000     #load shedding cost 
+LSCost=100000000000000     #load shedding cost
 
 
 #######   ANALYSIS
@@ -66,8 +66,8 @@ REVENUESWIND=zeros(length(T),length(WIND))
 TOTREVENUES=zeros(length(G)+length(WIND))
 PRICES=zeros(length(T),2)
 FLOW=zeros(length(T))
-LOADSHEDDING=zeros(length(T))
-
+LOADSHEDDINGDK1=zeros(length(T))
+LOADSHEDDINGDK2=zeros(length(T))
 
 
 
@@ -81,19 +81,20 @@ for t in T
         @variable(model_market, 0<=qg[g in G])
         @variable(model_market, 0<=qw[w in WIND])
         @variable(model_market, -TC<=F<=TC)
-        @variable(model_market, 0<=LS)
+        @variable(model_market, 0<=LSDK1)
+        @variable(model_market, 0<=LSDK2) 
 
-        @objective(model_market, Min, sum(pg[g]*qg[g] for g in G)+sum(pw[w]*qw[w] for w in WIND))
+        @objective(model_market, Min, sum(pg[g]*qg[g] for g in G)+sum(pw[w]*qw[w] for w in WIND)+LSDK1*LSCost+LSDK2*LSCost)
 
-        @constraint(model_market, equality1, sum(qg[g] for g in G_DK1)+sum(qw[w] for w in WWIND)+Imp1[t] - (D_DK1[t])==F)
-        @constraint(model_market, equality2, sum(qg[g] for g in G_DK2)+sum(qw[w] for w in EWIND)+Imp2[t] - (D_DK2[t])==-F)
+        @constraint(model_market, equality1, sum(qg[g] for g in G_DK1)+sum(qw[w] for w in WWIND)+Imp1[t] - (D_DK1[t]-LSDK1)==F)
+        @constraint(model_market, equality2, sum(qg[g] for g in G_DK2)+sum(qw[w] for w in EWIND)+Imp2[t] - (D_DK2[t]-LSDK2)==-F)
 
         @constraint(model_market, maxproductionG[g in G], qg[g]<=Qg[g][t])
         @constraint(model_market, maxproductionW[w in WIND], qw[w]<=QgW[w][t])
 
         optimize!(model_market)
 
-#OUTPUT
+########OUTPUT
 
 for g in G
         VOLUMES[t,g]=value.(qg[g])
@@ -128,8 +129,10 @@ end
 FLOW[t]=value.(F)
 PRICES[t,1]=dual.(equality1)
 PRICES[t,2]=dual.(equality2)
-LOADSHEDDING[t]=value.(LS)
-RESULTS=hcat(VOLUMES,REVENUES,PRICES,FLOW,LOADSHEDDING)
+LOADSHEDDINGDK1[t]=value.(LSDK1)
+LOADSHEDDINGDK2[t]=value.(LSDK2)
+
+RESULTS=hcat(VOLUMES,REVENUES,PRICES,FLOW,LOADSHEDDINGDK1,LOADSHEDDINGDK2)
 
 end
 
@@ -155,4 +158,3 @@ CSV.write("$path/Results_totrevenues.csv", df_TR)
 plot(PRICES[:,1])
 plot!(PRICES[:,2])
 savefig("$path/Prices.png")
-
